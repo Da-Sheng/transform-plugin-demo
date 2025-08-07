@@ -1,6 +1,18 @@
 # 变更日志
 
 
+
+## 1.0.2 (2025-08-07)
+
+### 其他
+
+- Add package-lock.json and update dependencies in package.json for postcss-transform-3d-accelerate. Improved regex handling for scale transformations and added tests for nested calc() functions to ensure proper functionality.
+- Release version 1.0.1 for postcss-transform-3d-accelerate. Updated package.json, package-lock.json, and CHANGELOG.md to reflect the new version. Enhanced tests to improve accuracy and clarity.
+- Update package.json to reflect new repository details for postcss-transform-3d-accelerate. Changed repository URL, bugs URL, and homepage to point to the new GitHub repository at https://github.com/Da-Sheng/transform-plugin-demo.
+- Enhance tests for postcss-transform-3d-accelerate plugin to reflect actual behavior. Updated assertions to check for CSS transformations without relying on property order, removed expectations for will-change property, and added comments for clarity on test modifications.
+- init
+
+
 ## 1.0.1 (2025-08-07)
 
 ### 其他
