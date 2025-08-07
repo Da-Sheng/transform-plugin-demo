@@ -26,12 +26,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/postcss-transform-3d-accelerate.git"
+    "url": "https://github.com/Da-Sheng/transform-plugin-demo"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/postcss-transform-3d-accelerate/issues"
+    "url": "https://github.com/Da-Sheng/transform-plugin-demo/issues"
   },
-  "homepage": "https://github.com/yourusername/postcss-transform-3d-accelerate#readme",
+  "homepage": "https://github.com/Da-Sheng/transform-plugin-demo#readme",
   "engines": {
     "node": ">=12.0.0"
   },
