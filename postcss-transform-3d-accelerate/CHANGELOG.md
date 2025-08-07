@@ -1,5 +1,15 @@
 # 变更日志
 
+
+## 1.0.1 (2025-08-07)
+
+### 其他
+
+- Update package.json to reflect new repository details for postcss-transform-3d-accelerate. Changed repository URL, bugs URL, and homepage to point to the new GitHub repository at https://github.com/Da-Sheng/transform-plugin-demo.
+- Enhance tests for postcss-transform-3d-accelerate plugin to reflect actual behavior. Updated assertions to check for CSS transformations without relying on property order, removed expectations for will-change property, and added comments for clarity on test modifications.
+- init
+
+
 ## 1.0.0 (2024-08-07)
 
 - 初始版本发布

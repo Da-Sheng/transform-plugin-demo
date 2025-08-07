@@ -1,6 +1,6 @@
 {
   "name": "postcss-transform-3d-accelerate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "PostCSS plugin to convert 2D transforms to 3D transforms for GPU acceleration",
   "main": "lib/index.js",
   "scripts": {
