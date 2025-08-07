@@ -3,7 +3,8 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 // 引入我们的 transform 插件
-const transformPlugin = require('./postcss-transform-3d-accelerate/lib');
+// const transformPlugin = require('./postcss-transform-3d-accelerate/lib');
+const transformPlugin = require('postcss-transform-3d-accelerate');
 
 module.exports = {
   entry: './src/index.js',

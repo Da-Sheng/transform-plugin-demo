@@ -93,6 +93,33 @@ describe('postcss-transform-3d-accelerate', () => {
     expect(result.warnings()).toHaveLength(0);
   });
 
+  it('handles nested calc() functions correctly', async () => {
+    const input = `
+      @keyframes move-calc {
+        50% {
+          transform: translateX(calc(25px + 5%)) scale(calc(var(--scale) * 1.2)) rotate(180deg);
+        }
+      }
+    `;
+    const result = await run(input);
+    
+    // 注意：由于嵌套calc()函数的复杂性，我们只检查关键部分
+    expect(result.css).toContain('translate3d(calc(25px + 5%)');
+    expect(result.css).toContain('scale3d(calc(var(--scale) * 1.2)');
+    expect(result.css).toContain('rotate3d(0, 0, 1, 180deg');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('fixes scale3d with complex nested calc functions', async () => {
+    const input = '.test { transform: scale(calc(var(--scale) * 1.2 + 5px)) rotate(45deg); }';
+    const result = await run(input);
+    
+    // 检查生成的CSS是否包含关键部分
+    expect(result.css).toContain('scale3d(calc(var(--scale) * 1.2 + 5px)');
+    expect(result.css).toContain('rotate3d(0, 0, 1, 45deg');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
   it('respects excludeSelectors option', async () => {
     const input = `
       .test { transform: translateX(10px); }

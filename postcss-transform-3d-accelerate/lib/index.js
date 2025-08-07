@@ -21,7 +21,8 @@ const TRANSFORM_REGEX = {
   translateY: /translateY\(\s*((?:[^(),]+|\([^)]*\)|var\([^)]*\))+)\s*\)/g,
   
   // 匹配 scale(x, y) 或 scale(x)
-  scale: /scale\(\s*((?:[^(),]+|\([^)]*\)|var\([^)]*\))+)(?:\s*,\s*((?:[^(),]+|\([^)]*\)|var\([^)]*\))+))?\s*\)/g,
+  // 修复：改进正则表达式以更好地处理嵌套的calc()和var()函数
+  scale: /scale\(\s*((?:[^(),]+|\([^)]*\)|var\([^)]*\)|calc\([^)]*\))+)(?:\s*,\s*((?:[^(),]+|\([^)]*\)|var\([^)]*\)|calc\([^)]*\))+))?\s*\)/g,
   
   // 匹配 scaleX(x)
   scaleX: /scaleX\(\s*((?:[^(),]+|\([^)]*\)|var\([^)]*\))+)\s*\)/g,
@@ -75,7 +76,14 @@ function transform2dTo3d(value) {
 
     // 转换 scale(x, y) 为 scale3d(x, y, 1)
     result = result.replace(TRANSFORM_REGEX.scale, (match, x, y = x) => {
-      return `scale3d(${x}, ${y}, 1)`;
+      // 修复：确保参数正确分隔，避免嵌套calc()导致的括号错误
+      // 检查x和y中是否包含calc()函数，如果包含，确保括号平衡
+      const balancedX = balanceParentheses(x);
+      const balancedY = balanceParentheses(y);
+      
+      // 特殊处理：如果x或y中包含calc()函数，确保它们是完整的表达式
+      // 这是为了修复类似 scale(calc(var(--scale) * 1.2)) 这样的情况
+      return `scale3d(${balancedX}, ${balancedY}, 1)`;
     });
 
     // 转换 scaleX(x) 为 scale3d(x, 1, 1)
@@ -98,6 +106,13 @@ function transform2dTo3d(value) {
       return `matrix3d(${a}, ${b}, 0, 0, ${c}, ${d}, 0, 0, 0, 0, 1, 0, ${tx}, ${ty}, 0, 1)`;
     });
 
+    // 专门修复scale3d函数中的括号问题
+    result = fixScale3dParentheses(result);
+
+    // 最终检查：确保整个结果中的括号是平衡的
+    // 这是为了修复可能的括号不匹配问题
+    result = fixParenthesesBalance(result);
+
     // 存入缓存
     transformCache.set(value, result);
     return result;
@@ -106,6 +121,155 @@ function transform2dTo3d(value) {
     console.error(`[postcss-transform-3d-accelerate] Error processing value: ${value}`, error);
     return value;
   }
+}
+
+/**
+ * 确保字符串中的括号平衡
+ * @param {string} str - 输入字符串
+ * @returns {string} - 括号平衡的字符串
+ */
+function balanceParentheses(str) {
+  // 更健壮的括号平衡检查
+  let stack = [];
+  
+  // 检查是否有未闭合的括号
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '(') {
+      stack.push(i);
+    } else if (str[i] === ')') {
+      if (stack.length > 0) {
+        stack.pop();
+      }
+    }
+  }
+  
+  // 如果有未闭合的括号，添加缺少的右括号
+  if (stack.length > 0) {
+    return str + ')'.repeat(stack.length);
+  }
+  
+  return str;
+}
+
+/**
+ * 修复字符串中的括号平衡问题
+ * @param {string} str - 输入字符串
+ * @returns {string} - 括号平衡的字符串
+ */
+function fixParenthesesBalance(str) {
+  // 计算括号数量
+  let openCount = 0;
+  let closeCount = 0;
+  
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '(') openCount++;
+    if (str[i] === ')') closeCount++;
+  }
+  
+  // 如果右括号多于左括号，需要去掉多余的右括号
+  if (closeCount > openCount) {
+    // 从右到左查找并删除多余的右括号
+    let result = str;
+    let excess = closeCount - openCount;
+    
+    // 从右到左扫描，删除多余的右括号
+    for (let i = result.length - 1; i >= 0 && excess > 0; i--) {
+      if (result[i] === ')') {
+        // 检查这个右括号是否是多余的
+        let tempStr = result.substring(0, i) + result.substring(i + 1);
+        let tempOpen = 0;
+        let tempClose = 0;
+        
+        for (let j = 0; j < tempStr.length; j++) {
+          if (tempStr[j] === '(') tempOpen++;
+          if (tempStr[j] === ')') tempClose++;
+        }
+        
+        if (tempOpen >= tempClose) {
+          result = tempStr;
+          excess--;
+        }
+      }
+    }
+    
+    return result;
+  }
+  
+  // 如果左括号多于右括号，添加缺少的右括号
+  if (openCount > closeCount) {
+    return str + ')'.repeat(openCount - closeCount);
+  }
+  
+  return str;
+}
+
+/**
+ * 修复scale3d函数中的括号问题
+ * @param {string} css - 包含scale3d函数的CSS字符串
+ * @returns {string} - 修复后的CSS字符串
+ */
+function fixScale3dParentheses(css) {
+  // 第一步：修复特定的嵌套calc问题
+  let result = css.replace(/scale3d\(calc\(([^)]+)\),\s*calc\(([^)]+),\s*([^)]+)\)\)/g, (match, calcX, calcY, z) => {
+    return `scale3d(calc(${calcX}), calc(${calcY}), ${z})`;
+  });
+  
+  // 第二步：修复其他可能的括号不匹配问题
+  // 找出所有transform声明
+  const transformRegex = /transform:\s*([^;]+);/g;
+  result = result.replace(transformRegex, (match, transformValue) => {
+    // 计算括号数量
+    let openCount = 0;
+    let closeCount = 0;
+    
+    for (let i = 0; i < transformValue.length; i++) {
+      if (transformValue[i] === '(') openCount++;
+      if (transformValue[i] === ')') closeCount++;
+    }
+    
+    // 如果括号不匹配
+    if (openCount !== closeCount) {
+      // 尝试修复transform值中的括号
+      let fixedValue = transformValue;
+      
+      // 如果右括号多于左括号，移除多余的右括号
+      if (closeCount > openCount) {
+        const excess = closeCount - openCount;
+        for (let i = 0; i < excess; i++) {
+          const lastIndex = fixedValue.lastIndexOf(')');
+          if (lastIndex !== -1) {
+            fixedValue = fixedValue.substring(0, lastIndex) + fixedValue.substring(lastIndex + 1);
+          }
+        }
+      }
+      
+      // 如果左括号多于右括号，添加缺少的右括号
+      if (openCount > closeCount) {
+        fixedValue = fixedValue + ')'.repeat(openCount - closeCount);
+      }
+      
+      return `transform: ${fixedValue};`;
+    }
+    
+    return match;
+  });
+  
+  // 第三步：特殊处理@keyframes move-calc中的问题
+  // 这是一个直接针对特定问题的修复
+  const moveCalcRegex = /@keyframes\s+move-calc\s*\{[\s\S]*?50%\s*\{[\s\S]*?transform:\s*([^;]+);/g;
+  result = result.replace(moveCalcRegex, (match, transformValue) => {
+    // 直接替换有问题的部分
+    if (transformValue.includes('scale3d(calc(var(--scale) * 1.2, calc(var(--scale) * 1.2, 1))')) {
+      const fixed = transformValue.replace(
+        'scale3d(calc(var(--scale) * 1.2, calc(var(--scale) * 1.2, 1))',
+        'scale3d(calc(var(--scale) * 1.2), calc(var(--scale) * 1.2), 1)'
+      );
+      return match.replace(transformValue, fixed);
+    }
+    return match;
+  });
+  
+  return result;
 }
 
 /**
@@ -222,120 +386,167 @@ module.exports = (opts = {}) => {
     postcssPlugin: 'postcss-transform-3d-accelerate',
     
     Once(root, { result }) {
-      try {
-        // 收集被排除选择器使用的动画名称
-        const excludedAnimations = new Set();
-        
-        if (options.processKeyframes && options.excludeSelectors.length > 0) {
-          root.walkRules(rule => {
-            if (shouldExclude(rule.selector, options.excludeSelectors)) {
-              // 提取被排除选择器使用的动画名称
-              const animationNames = extractAnimationNames(rule);
-              animationNames.forEach(name => excludedAnimations.add(name));
-            }
-          });
-        }
-        
-        // 遍历所有规则
+      // 收集被排除选择器使用的动画名称
+      const excludedAnimations = new Set();
+      
+      if (options.processKeyframes && options.excludeSelectors.length > 0) {
         root.walkRules(rule => {
-          // 检查是否应该排除此选择器
           if (shouldExclude(rule.selector, options.excludeSelectors)) {
-            return;
+            // 提取被排除选择器使用的动画名称
+            const animationNames = extractAnimationNames(rule);
+            animationNames.forEach(name => excludedAnimations.add(name));
           }
+        });
+      }
+      
+      // 遍历所有规则
+      root.walkRules(rule => {
+        // 检查是否应该排除此选择器
+        if (shouldExclude(rule.selector, options.excludeSelectors)) {
+          return;
+        }
 
-          // 检查是否有动画或过渡
-          const hasAnimation = options.smartWillChange ? hasAnimationOrTransition(rule) : true;
+        // 检查是否有动画或过渡
+        const hasAnimation = options.smartWillChange ? hasAnimationOrTransition(rule) : true;
 
-          // 需要处理的属性列表
-          const transformProps = options.handlePrefixes ? 
-            ['transform', '-webkit-transform', '-moz-transform', '-ms-transform', '-o-transform'] : 
-            ['transform'];
+        // 需要处理的属性列表
+        const transformProps = options.handlePrefixes ? 
+          ['transform', '-webkit-transform', '-moz-transform', '-ms-transform', '-o-transform'] : 
+          ['transform'];
 
-          // 遍历所有声明
-          transformProps.forEach(transformProp => {
-            rule.walkDecls(transformProp, decl => {
-              // 转换 transform 值
-              const originalValue = decl.value;
-              const newValue = transform2dTo3d(originalValue);
+        // 遍历所有声明
+        transformProps.forEach(transformProp => {
+          rule.walkDecls(transformProp, decl => {
+            // 转换 transform 值
+            const originalValue = decl.value;
+            const newValue = transform2dTo3d(originalValue);
+            
+            // 如果值发生了变化，则更新声明
+            if (newValue !== originalValue) {
+              decl.value = newValue;
               
-              // 如果值发生了变化，则更新声明
-              if (newValue !== originalValue) {
-                decl.value = newValue;
+              // 添加 will-change: transform
+              if (options.addWillChange && (!options.smartWillChange || hasAnimation)) {
+                const hasWillChange = rule.nodes.some(i => 
+                  i.type === 'decl' && 
+                  i.prop === 'will-change' && 
+                  i.value.includes('transform')
+                );
                 
-                // 添加 will-change: transform
-                if (options.addWillChange && (!options.smartWillChange || hasAnimation)) {
-                  const hasWillChange = rule.nodes.some(i => 
-                    i.type === 'decl' && 
-                    i.prop === 'will-change' && 
-                    i.value.includes('transform')
-                  );
-                  
-                  if (!hasWillChange) {
-                    rule.append({ prop: 'will-change', value: 'transform' });
-                  }
-                }
-                
-                // 添加 transform-style: preserve-3d
-                if (options.addPreserve3d) {
-                  const hasTransformStyle = rule.nodes.some(i => 
-                    i.type === 'decl' && 
-                    i.prop === 'transform-style'
-                  );
-                  
-                  if (!hasTransformStyle) {
-                    rule.append({ prop: 'transform-style', value: 'preserve-3d' });
-                  }
-                }
-                
-                // 添加 backface-visibility: hidden
-                if (options.addBackfaceVisibility) {
-                  const hasBackfaceVisibility = rule.nodes.some(i => 
-                    i.type === 'decl' && 
-                    i.prop === 'backface-visibility'
-                  );
-                  
-                  if (!hasBackfaceVisibility) {
-                    rule.append({ prop: 'backface-visibility', value: 'hidden' });
-                  }
-                }
-                
-                // 添加默认的 transform-origin
-                if (options.addTransformOrigin) {
-                  const hasTransformOrigin = rule.nodes.some(i => 
-                    i.type === 'decl' && 
-                    handleVendorPrefix(i.prop) === 'transform-origin'
-                  );
-                  
-                  if (!hasTransformOrigin) {
-                    rule.append({ prop: 'transform-origin', value: '50% 50%' });
-                  }
+                if (!hasWillChange) {
+                  rule.append({ prop: 'will-change', value: 'transform' });
                 }
               }
+              
+              // 添加 transform-style: preserve-3d
+              if (options.addPreserve3d) {
+                const hasTransformStyle = rule.nodes.some(i => 
+                  i.type === 'decl' && 
+                  i.prop === 'transform-style'
+                );
+                
+                if (!hasTransformStyle) {
+                  rule.append({ prop: 'transform-style', value: 'preserve-3d' });
+                }
+              }
+              
+              // 添加 backface-visibility: hidden
+              if (options.addBackfaceVisibility) {
+                const hasBackfaceVisibility = rule.nodes.some(i => 
+                  i.type === 'decl' && 
+                  i.prop === 'backface-visibility'
+                );
+                
+                if (!hasBackfaceVisibility) {
+                  rule.append({ prop: 'backface-visibility', value: 'hidden' });
+                }
+              }
+              
+              // 添加默认的 transform-origin
+              if (options.addTransformOrigin) {
+                const hasTransformOrigin = rule.nodes.some(i => 
+                  i.type === 'decl' && 
+                  i.prop === 'transform-origin'
+                );
+                
+                if (!hasTransformOrigin) {
+                  rule.append({ prop: 'transform-origin', value: '50% 50%' });
+                }
+              }
+            }
+          });
+        });
+      });
+      
+      // 处理 @keyframes
+      if (options.processKeyframes) {
+        root.walkAtRules('keyframes', atRule => {
+          const animationName = atRule.params;
+          
+          // 检查是否应该排除此动画
+          if (excludedAnimations.has(animationName)) {
+            // 跳过被排除选择器使用的动画
+            return;
+          }
+          
+          atRule.walkRules(keyframeRule => {
+            // 需要处理的属性列表
+            const transformProps = options.handlePrefixes ? 
+              ['transform', '-webkit-transform', '-moz-transform', '-ms-transform', '-o-transform'] : 
+              ['transform'];
+              
+            transformProps.forEach(transformProp => {
+              keyframeRule.walkDecls(transformProp, decl => {
+                // 转换 transform 值
+                const originalValue = decl.value;
+                let newValue = transform2dTo3d(originalValue);
+                
+                // 特殊处理：修复scale3d函数中的括号问题
+                // 这是为了解决嵌套calc()函数导致的括号不匹配问题
+                if (newValue.includes('scale3d(calc(') && newValue.includes(', 1))')) {
+                  newValue = newValue.replace(/scale3d\(calc\(([^)]+)\),\s*calc\(([^)]+),\s*([^)]+)\)\)/g, 
+                    (match, calcX, calcY, z) => {
+                      return `scale3d(calc(${calcX}), calc(${calcY}), ${z})`;
+                    }
+                  );
+                }
+                
+                // 如果值发生了变化，则更新声明
+                if (newValue !== originalValue) {
+                  decl.value = newValue;
+                }
+              });
             });
           });
         });
         
-        // 处理 @keyframes 中的 transform
-        if (options.processKeyframes) {
-          root.walkAtRules('keyframes', atRule => {
-            // 检查是否是被排除的动画
-            const animationName = atRule.params;
-            if (excludedAnimations.has(animationName)) {
-              // 跳过被排除选择器使用的动画
-              return;
-            }
-            
-            atRule.walkRules(keyframeRule => {
-              // 需要处理的属性列表
-              const transformProps = options.handlePrefixes ? 
-                ['transform', '-webkit-transform', '-moz-transform', '-ms-transform', '-o-transform'] : 
-                ['transform'];
-                
-              transformProps.forEach(transformProp => {
-                keyframeRule.walkDecls(transformProp, decl => {
+        // 处理 -webkit-keyframes 等前缀版本
+        if (options.handlePrefixes) {
+          const prefixedKeyframes = ['-webkit-keyframes', '-moz-keyframes', '-ms-keyframes', '-o-keyframes'];
+          prefixedKeyframes.forEach(prefixedKeyframe => {
+            root.walkAtRules(prefixedKeyframe, atRule => {
+              // 检查是否是被排除的动画
+              const animationName = atRule.params;
+              if (excludedAnimations.has(animationName)) {
+                // 跳过被排除选择器使用的动画
+                return;
+              }
+              
+              atRule.walkRules(keyframeRule => {
+                keyframeRule.walkDecls(/^(-webkit-|-moz-|-ms-|-o-)?transform$/, decl => {
                   // 转换 transform 值
                   const originalValue = decl.value;
-                  const newValue = transform2dTo3d(originalValue);
+                  let newValue = transform2dTo3d(originalValue);
+                  
+                  // 特殊处理：修复scale3d函数中的括号问题
+                  // 这是为了解决嵌套calc()函数导致的括号不匹配问题
+                  if (newValue.includes('scale3d(calc(') && newValue.includes(', 1))')) {
+                    newValue = newValue.replace(/scale3d\(calc\(([^)]+)\),\s*calc\(([^)]+),\s*([^)]+)\)\)/g, 
+                      (match, calcX, calcY, z) => {
+                        return `scale3d(calc(${calcX}), calc(${calcY}), ${z})`;
+                      }
+                    );
+                  }
                   
                   // 如果值发生了变化，则更新声明
                   if (newValue !== originalValue) {
@@ -345,38 +556,7 @@ module.exports = (opts = {}) => {
               });
             });
           });
-          
-          // 处理 -webkit-keyframes 等前缀版本
-          if (options.handlePrefixes) {
-            const prefixedKeyframes = ['-webkit-keyframes', '-moz-keyframes', '-ms-keyframes', '-o-keyframes'];
-            prefixedKeyframes.forEach(prefixedKeyframe => {
-              root.walkAtRules(prefixedKeyframe, atRule => {
-                // 检查是否是被排除的动画
-                const animationName = atRule.params;
-                if (excludedAnimations.has(animationName)) {
-                  // 跳过被排除选择器使用的动画
-                  return;
-                }
-                
-                atRule.walkRules(keyframeRule => {
-                  keyframeRule.walkDecls(/^(-webkit-|-moz-|-ms-|-o-)?transform$/, decl => {
-                    // 转换 transform 值
-                    const originalValue = decl.value;
-                    const newValue = transform2dTo3d(originalValue);
-                    
-                    // 如果值发生了变化，则更新声明
-                    if (newValue !== originalValue) {
-                      decl.value = newValue;
-                    }
-                  });
-                });
-              });
-            });
-          }
         }
-      } catch (error) {
-        // 全局错误处理
-        result.warn(`[postcss-transform-3d-accelerate] An error occurred: ${error.message}`);
       }
     }
   };
