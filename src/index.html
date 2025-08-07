@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transform Plugin Demo</title>
+</head>
+<body>
+  <h1>Transform Plugin Demo</h1>
+  <p>这个演示展示了CSS Transform 3D加速插件的效果</p>
+  
+  <h2>基本测试</h2>
+  <div class="container">
+    <div class="box normal">普通2D变换</div>
+    <div class="box accelerated">3D加速变换</div>
+    <div class="box no-transform">排除的选择器（不会被转换）</div>
+  </div>
+  
+  <h2>功能增强测试</h2>
+  <div class="container">
+    <div class="box calc-test">CSS函数支持<br>calc() & var()</div>
+    <div class="box prefix-test">浏览器前缀支持</div>
+    <div class="box complex-test">复合变换</div>
+  </div>
+  
+  <h2>智能will-change测试</h2>
+  <div class="container">
+    <div class="box smart-will-change">有过渡效果<br>应添加will-change</div>
+    <div class="box no-animation">无动画效果<br>不应添加will-change</div>
+    <div class="box edge-case">边界情况测试<br>带注释的变换</div>
+  </div>
+  
+  <h2>性能测试</h2>
+  <div id="performance-container" style="position: relative; height: 300px; border: 1px solid #ccc; margin-bottom: 20px;">
+    <div style="position: absolute; top: 10px; left: 10px;">
+      <span style="display: inline-block; width: 10px; height: 10px; background-color: blue; border-radius: 50%; margin-right: 5px;"></span>
+      <span>2D变换 (蓝色)</span>
+    </div>
+    <div style="position: absolute; top: 10px; left: 200px;">
+      <span style="display: inline-block; width: 10px; height: 10px; background-color: red; border-radius: 50%; margin-right: 5px;"></span>
+      <span>3D变换 (红色)</span>
+    </div>
+    <!-- 性能测试元素将在JS中动态生成 -->
+  </div>
+  
+  <div class="controls">
+    <button id="animate">开始动画</button>
+    <button id="toggle">切换FPS显示</button>
+    <button id="performance">开始性能测试</button>
+  </div>
+  
+  <div id="fps-meter">FPS: <span id="fps">0</span></div>
+  
+  <div id="output" style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;">
+    <h3>插件处理结果</h3>
+    <p>运行后，此处将显示CSS变换前后的对比</p>
+  </div>
+</body>
+</html> 

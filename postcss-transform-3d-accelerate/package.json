@@ -1,0 +1,46 @@
+{
+  "name": "postcss-transform-3d-accelerate",
+  "version": "1.0.0",
+  "description": "PostCSS plugin to convert 2D transforms to 3D transforms for GPU acceleration",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "jest",
+    "bump": "node scripts/bump.js",
+    "bump:patch": "npm version patch -m \"chore(release): %s\" && npm run update-changelog",
+    "bump:minor": "npm version minor -m \"chore(release): %s\" && npm run update-changelog",
+    "bump:major": "npm version major -m \"chore(release): %s\" && npm run update-changelog",
+    "update-changelog": "node scripts/update-changelog.js",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "postcss",
+    "postcss-plugin",
+    "css",
+    "transform",
+    "3d",
+    "gpu",
+    "acceleration",
+    "performance"
+  ],
+  "author": "Da-Sheng",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/postcss-transform-3d-accelerate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/postcss-transform-3d-accelerate/issues"
+  },
+  "homepage": "https://github.com/yourusername/postcss-transform-3d-accelerate#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "peerDependencies": {
+    "postcss": "^8.0.0"
+  },
+  "devDependencies": {
+    "bump": "^0.2.5",
+    "jest": "^29.0.0",
+    "postcss": "^8.4.31"
+  }
+}

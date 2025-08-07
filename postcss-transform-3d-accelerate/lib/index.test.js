@@ -1,0 +1,184 @@
+const postcss = require('postcss');
+const plugin = require('./index');
+
+async function run(input, opts = {}) {
+  return postcss([plugin(opts)]).process(input, { from: undefined });
+}
+
+describe('postcss-transform-3d-accelerate', () => {
+  it('transforms translate to translate3d', async () => {
+    const input = '.test { transform: translate(10px, 20px); }';
+    const output = '.test { transform: translate3d(10px, 20px, 0); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms translateX to translate3d', async () => {
+    const input = '.test { transform: translateX(10px); }';
+    const output = '.test { transform: translate3d(10px, 0, 0); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms translateY to translate3d', async () => {
+    const input = '.test { transform: translateY(20px); }';
+    const output = '.test { transform: translate3d(0, 20px, 0); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms scale to scale3d', async () => {
+    const input = '.test { transform: scale(1.5); }';
+    const output = '.test { transform: scale3d(1.5, 1.5, 1); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms scaleX to scale3d', async () => {
+    const input = '.test { transform: scaleX(1.5); }';
+    const output = '.test { transform: scale3d(1.5, 1, 1); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms scaleY to scale3d', async () => {
+    const input = '.test { transform: scaleY(1.5); }';
+    const output = '.test { transform: scale3d(1, 1.5, 1); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms rotate to rotate3d', async () => {
+    const input = '.test { transform: rotate(45deg); }';
+    const output = '.test { transform: rotate3d(0, 0, 1, 45deg); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms matrix to matrix3d', async () => {
+    const input = '.test { transform: matrix(1, 0, 0, 1, 10, 20); }';
+    const output = '.test { transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 20, 0, 1); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('transforms multiple functions', async () => {
+    const input = '.test { transform: translateX(10px) scale(1.5) rotate(45deg); }';
+    const output = '.test { transform: translate3d(10px, 0, 0) scale3d(1.5, 1.5, 1) rotate3d(0, 0, 1, 45deg); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('handles calc() and var() functions', async () => {
+    const input = '.test { transform: translateX(calc(10px + 5%)) scale(var(--scale)); }';
+    const output = '.test { transform: translate3d(calc(10px + 5%), 0, 0) scale3d(var(--scale), var(--scale), 1); will-change: transform; }';
+    const result = await run(input);
+    expect(result.css).toEqual(output);
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('respects excludeSelectors option', async () => {
+    const input = `
+      .test { transform: translateX(10px); }
+      .no-transform { transform: translateX(10px); }
+    `;
+    const result = await run(input, { excludeSelectors: ['.no-transform'] });
+    expect(result.css).toContain('translate3d(10px, 0, 0)');
+    expect(result.css).toContain('translateX(10px)');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('respects excludeSelectors with regex', async () => {
+    const input = `
+      .test { transform: translateX(10px); }
+      .no-transform { transform: translateX(10px); }
+      .no-gpu { transform: translateX(10px); }
+    `;
+    const result = await run(input, { excludeSelectors: [/\.no-/] });
+    expect(result.css).toContain('translate3d(10px, 0, 0)');
+    expect(result.css).toContain('translateX(10px)');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('handles keyframes', async () => {
+    const input = `
+      @keyframes move {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(100px); }
+      }
+    `;
+    const result = await run(input);
+    expect(result.css).toContain('transform: translate3d(0, 0, 0)');
+    expect(result.css).toContain('transform: translate3d(100px, 0, 0)');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('excludes keyframes used by excluded selectors', async () => {
+    const input = `
+      .no-transform { animation: move 1s; }
+      @keyframes move {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(100px); }
+      }
+    `;
+    const result = await run(input, { excludeSelectors: ['.no-transform'] });
+    expect(result.css).toContain('transform: translateX(0)');
+    expect(result.css).toContain('transform: translateX(100px)');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('adds will-change only with animations when smartWillChange is true', async () => {
+    const input = `
+      .with-animation { transform: translateX(10px); transition: transform 0.3s; }
+      .no-animation { transform: translateX(10px); }
+    `;
+    const result = await run(input, { smartWillChange: true });
+    expect(result.css).toContain('.with-animation { transform: translate3d(10px, 0, 0); will-change: transform; transition: transform 0.3s; }');
+    expect(result.css).toContain('.no-animation { transform: translate3d(10px, 0, 0); }');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('respects addWillChange option', async () => {
+    const input = '.test { transform: translateX(10px); }';
+    const result = await run(input, { addWillChange: false });
+    expect(result.css).toEqual('.test { transform: translate3d(10px, 0, 0); }');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('respects addPreserve3d option', async () => {
+    const input = '.test { transform: translateX(10px); }';
+    const result = await run(input, { addPreserve3d: true });
+    expect(result.css).toContain('transform-style: preserve-3d');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('respects addBackfaceVisibility option', async () => {
+    const input = '.test { transform: translateX(10px); }';
+    const result = await run(input, { addBackfaceVisibility: true });
+    expect(result.css).toContain('backface-visibility: hidden');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('respects addTransformOrigin option', async () => {
+    const input = '.test { transform: translateX(10px); }';
+    const result = await run(input, { addTransformOrigin: true });
+    expect(result.css).toContain('transform-origin: 50% 50%');
+    expect(result.warnings()).toHaveLength(0);
+  });
+
+  it('handles prefixed transforms', async () => {
+    const input = '.test { -webkit-transform: translateX(10px); }';
+    const result = await run(input);
+    expect(result.css).toContain('-webkit-transform: translate3d(10px, 0, 0)');
+    expect(result.warnings()).toHaveLength(0);
+  });
+}); 
